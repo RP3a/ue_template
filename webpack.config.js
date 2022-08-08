@@ -4,8 +4,11 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const TerserPlugin = require("terser-webpack-plugin");
 const CopyPlugin = require("copy-webpack-plugin");
 
+
+
 function initCanisterEnv() {
-  let localCanisters, prodCanisters;
+  let localCanisters, prodCanisters, canisters;
+ 
   try {
     localCanisters = require(path.resolve(
       ".dfx",
@@ -26,15 +29,25 @@ function initCanisterEnv() {
     (process.env.NODE_ENV === "production" ? "ic" : "local");
 
   const canisterConfig = network === "local" ? localCanisters : prodCanisters;
+  canisters = network === "local" ? localCanisters : prodCanisters;
 
-  return Object.entries(canisterConfig).reduce((prev, current) => {
-    const [canisterName, canisterDetails] = current;
-    prev[canisterName.toUpperCase() + "_CANISTER_ID"] =
-      canisterDetails[network];
-    return prev;
-  }, {});
+  for (const canister in canisters) {
+    process.env[canister.toUpperCase() + "_CANISTER_ID"] =
+      canisters[canister][network];
+  }
+
+  return canisters
+
+  // return Object.entries(canisterConfig).reduce((prev, current) => {
+  //   const [canisterName, canisterDetails] = current;
+  //   prev[canisterName.toUpperCase() + "_CANISTER_ID"] =
+  //     canisterDetails[network];
+  //   return prev;
+  // }, {});
 }
 const canisterEnvVariables = initCanisterEnv();
+
+const canisters = initCanisterEnv();
 
 const isDevelopment = process.env.NODE_ENV !== "production";
 
@@ -48,7 +61,9 @@ module.exports = {
   entry: {
     // The frontend.entrypoint points to the HTML file for this build, so we need
     // to replace the extension to `.js`.
-    index: path.join(__dirname, asset_entry).replace(/\.html$/, ".js"),
+    index: path.join(__dirname, asset_entry).replace(/\.html$/, ".tsx"),
+    peer_stream: path.join(__dirname, "src", frontendDirectory, "src", "peer-stream.js"),
+    
   },
   devtool: isDevelopment ? "source-map" : false,
   optimization: {
@@ -66,7 +81,7 @@ module.exports = {
     },
   },
   output: {
-    filename: "index.js",
+    filename: "[name].js",
     path: path.join(__dirname, "dist", frontendDirectory),
   },
 
@@ -75,12 +90,12 @@ module.exports = {
   // webpack configuration. For example, if you are using React
   // modules and CSS as described in the "Adding a stylesheet"
   // tutorial, uncomment the following lines:
-  // module: {
-  //  rules: [
-  //    { test: /\.(ts|tsx|jsx)$/, loader: "ts-loader" },
-  //    { test: /\.css$/, use: ['style-loader','css-loader'] }
-  //  ]
-  // },
+  module: {
+   rules: [
+     { test: /\.(ts|tsx|jsx)$/, loader: "ts-loader" },
+     { test: /\.css$/, use: ['style-loader','css-loader'] }
+   ]
+  },
   plugins: [
     new HtmlWebpackPlugin({
       template: path.join(__dirname, asset_entry),
@@ -96,7 +111,11 @@ module.exports = {
     }),
     new webpack.EnvironmentPlugin({
       NODE_ENV: "development",
-      ...canisterEnvVariables,
+      //...canisterEnvVariables,
+      UE_TEMPLATE_CANISTER_ID: canisters["ue_template"],
+      II_URL: isDevelopment        
+        ? "http://localhost:8080/#authorize"        
+        : "https://identity.ic0.app/#authorize",
     }),
     new webpack.ProvidePlugin({
       Buffer: [require.resolve("buffer/"), "Buffer"],

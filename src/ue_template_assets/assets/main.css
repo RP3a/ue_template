@@ -3,6 +3,22 @@ body {
     font-size: 1.5rem;
 }
 
+main {
+    display: flex;
+    flex-direction: column;
+}
+
+main > * {
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+main > * > * {
+    margin: auto;    
+    flex-direction: column;
+}
+
 img {
     max-width: 50vw;
     max-height: 25vw;
@@ -20,10 +36,38 @@ form {
     align-items: baseline;
 }
 
-button[type="submit"] {
-    padding: 5px 20px;
-    margin: 10px auto;
-    float: right;
+button {    
+    margin: 20px auto;    
+    width: 200px;
+    height: 40px;
+    border: 1.5px solid #323232;
+    border-radius: 65px;
+    font-weight: 700;
+}
+
+button.disabled{
+    opacity: .5;
+    pointer-events: none;
+    cursor:not-allowed;
+}
+
+button.red{
+    background: red;
+    color: white;
+}
+
+button.green{
+    background: green;
+    color: white;
+}
+
+button.blue{
+    background: rgb(44, 118, 255);
+    color: white;
+}
+
+button.orange{
+    background: orange;
 }
 
 #greeting {
@@ -33,5 +77,9 @@ button[type="submit"] {
 }
 
 #greeting:empty {
+    display: none;
+}
+
+video {
     display: none;
 }
