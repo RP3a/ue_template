@@ -18,6 +18,7 @@ If you want to start working on your project right away, you might want to try t
 cd ue_template/
 dfx help
 dfx config --help
+npm i
 ```
 
 ## Running the project locally
