@@ -81,22 +81,10 @@ class PeerStream extends HTMLVideoElement {
     this.ws = { send() {}, close() {} }; // WebSocket
     this.pc = { close() {} }; // RTCPeerConnection
 
-    this.setupVideo();
-    this.registerKeyboardEvents();
-    this.registerMouseHoverEvents();
-    this.registerFakeMouseEvents();
+    // this.setupVideo();
+ 
 
-    document.addEventListener(
-      "pointerlockchange",
-      () => {
-        if (document.pointerLockElement === this) {
-          this.registerPointerlockEvents();
-        } else {
-          this.registerMouseHoverEvents();
-        }
-      },
-      false
-    );
+
 
     this.addEventListener("loadeddata", (e) => {
       this.style["aspect-ratio"] = this.videoWidth / this.videoHeight;
@@ -182,8 +170,6 @@ class PeerStream extends HTMLVideoElement {
 
       await this.pc.setRemoteDescription(offer);
 
-      // Setup a transceiver for getting UE video
-      this.pc.addTransceiver("video", { direction: "recvonly" });
 
       const answer = await this.pc.createAnswer();
       await this.pc.setLocalDescription(answer);
@@ -260,24 +246,7 @@ class PeerStream extends HTMLVideoElement {
     }
   }
 
-  setupVideo() {
-    this.tabIndex = 0; // easy to focus..
-    this.autofocus = true;
-    this.playsInline = true;
-    this.disablepictureinpicture = true;
-
-    // Recently many browsers can only autoplay the videos with sound off
-    this.muted = true;
-    this.autoplay = true;
-
-    // this.onsuspend
-    // this.onresize
-    // this.requestPointerLock();
-
-    this.style["pointer-events"] = "none";
-    this.style["object-fit"] = "fill";
-  }
-
+  
   setupDataChannel(e) {
     // See https://www.w3.org/TR/webrtc/#dom-rtcdatachannelinit for values (this is needed for Firefox to be consistent with Chrome.)
     // this.dc = this.pc.createDataChannel(label, { ordered: true });
@@ -325,16 +294,7 @@ class PeerStream extends HTMLVideoElement {
       // ],
     });
 
-    this.pc.ontrack = (e) => {
-      console.log(`↓↓ ${e.track.kind} track:`, e);
-      if (e.track.kind === "video") {
-        this.srcObject = e.streams[0];
-      } else if (e.track.kind === "audio") {
-        this.audio = document.createElement("audio");
-        this.audio.autoplay = true;
-        this.audio.srcObject = e.streams[0];
-      }
-    };
+   
     this.pc.onicecandidate = (e) => {
       // firefox
       if (e.candidate?.candidate) {
@@ -351,252 +311,6 @@ class PeerStream extends HTMLVideoElement {
     };
   }
 
-  registerKeyboardEvents() {
-    this.onkeydown = (e) => {
-      this.dc.send(new Uint8Array([SEND.KeyDown, SpecialKeyCodes[e.code] || e.keyCode, e.repeat]));
-      // whether to prevent browser"s default behavior when keyboard/mouse have inputs, like F1~F12 and Tab
-      e.preventDefault();
-      //  e.stopPropagation
-    };
-
-    this.onkeyup = (e) => {
-      this.dc.send(new Uint8Array([SEND.KeyUp, SpecialKeyCodes[e.code] || e.keyCode]));
-      e.preventDefault();
-    };
-
-    this.onkeypress = (e) => {
-      const data = new DataView(new ArrayBuffer(3));
-      data.setUint8(0, SEND.KeyPress);
-      data.setUint16(1, SpecialKeyCodes[e.code] || e.keyCode, true);
-      this.dc.send(data);
-      e.preventDefault();
-    };
-  }
-
-  registerTouchEvents() {
-    // We need to assign a unique identifier to each finger.
-    // We do this by mapping each Touch object to the identifier.
-    const fingers = [9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
-    const fingerIds = {};
-
-    this.ontouchstart = (e) => {
-      // Assign a unique identifier to each touch.
-      for (const touch of e.changedTouches) {
-        // remember touch
-        const finger = fingers.pop();
-        if (finger === undefined) {
-          console.info("exhausted touch indentifiers");
-        }
-        fingerIds[touch.identifier] = finger;
-      }
-      this.emitTouchData(SEND.TouchStart, e.changedTouches, fingerIds);
-      e.preventDefault();
-    };
-
-    this.ontouchend = (e) => {
-      this.emitTouchData(SEND.TouchEnd, e.changedTouches, fingerIds);
-      // Re-cycle unique identifiers previously assigned to each touch.
-      for (const touch of e.changedTouches) {
-        // forget touch
-        fingers.push(fingerIds[touch.identifier]);
-        delete fingerIds[touch.identifier];
-      }
-      e.preventDefault();
-    };
-
-    this.ontouchmove = (e) => {
-      this.emitTouchData(SEND.TouchMove, e.touches, fingerIds);
-      e.preventDefault();
-    };
-  }
-
-  
-  registerFakeMouseEvents() {
-    let finger = undefined;
-
-    const { left, top } = this.getBoundingClientRect();
-
-    this.ontouchstart = (e) => {
-      if (finger === undefined) {
-        const firstTouch = e.changedTouches[0];
-        finger = {
-          id: firstTouch.identifier,
-          x: firstTouch.clientX - left,
-          y: firstTouch.clientY - top,
-        };
-        // Hack: Mouse events require an enter and leave so we just enter and leave manually with each touch as this event is not fired with a touch device.
-        this.onmouseenter(e);
-        this.emitMouseDown(MouseButton.MainButton, finger.x, finger.y);
-      }
-      e.preventDefault();
-    };
-
-    this.ontouchend = (e) => {
-      for (const touch of e.changedTouches) {
-        if (touch.identifier === finger.id) {
-          const x = touch.clientX - left;
-          const y = touch.clientY - top;
-          this.emitMouseUp(MouseButton.MainButton, x, y);
-          // Hack: Manual mouse leave event.
-          this.onmouseleave(e);
-          finger = undefined;
-          break;
-        }
-      }
-      e.preventDefault();
-    };
-
-    this.ontouchmove = (e) => {
-      for (const touch of e.touches) {
-        if (touch.identifier === finger.id) {
-          const x = touch.clientX - left;
-          const y = touch.clientY - top;
-          this.emitMouseMove(x, y, x - finger.x, y - finger.y);
-          finger.x = x;
-          finger.y = y;
-          break;
-        }
-      }
-      e.preventDefault();
-    };
-  }
-
-  registerMouseHoverEvents() {
-    this.registerMouseEnterAndLeaveEvents();
-
-    this.onmousemove = (e) => {
-      this.emitMouseMove(e.offsetX, e.offsetY, e.movementX, e.movementY);
-      e.preventDefault();
-    };
-
-    this.onmousedown = (e) => {
-      this.emitMouseDown(e.button, e.offsetX, e.offsetY);
-      // e.preventDefault();
-    };
-
-    this.onmouseup = (e) => {
-      this.emitMouseUp(e.button, e.offsetX, e.offsetY);
-      // e.preventDefault();
-    };
-
-    // When the context menu is shown then it is safest to release the button which was pressed when the event happened. This will guarantee we will get at least one mouse up corresponding to a mouse down event. Otherwise the mouse can get stuck.
-    // https://github.com/facebook/react/issues/5531
-    this.oncontextmenu = (e) => {
-      this.emitMouseUp(e.button, e.offsetX, e.offsetY);
-      e.preventDefault();
-    };
-
-    this.onwheel = (e) => {
-      this.emitMouseWheel(e.wheelDelta, e.offsetX, e.offsetY);
-      e.preventDefault();
-    };
-  }
-
-  registerPointerlockEvents() {
-    this.registerMouseEnterAndLeaveEvents();
-
-    console.info("mouse locked in, ESC to exit");
-
-    const { clientWidth, clientHeight } = this;
-    let x = clientWidth / 2;
-    let y = clientHeight / 2;
-
-    this.onmousemove = (e) => {
-      x += e.movementX;
-      y += e.movementY;
-      x = (x + clientWidth) % clientWidth;
-      y = (y + clientHeight) % clientHeight;
-
-      this.emitMouseMove(x, y, e.movementX, e.movementY);
-    };
-
-    this.onmousedown = (e) => {
-      this.emitMouseDown(e.button, x, y);
-    };
-
-    this.onmouseup = (e) => {
-      this.emitMouseUp(e.button, x, y);
-    };
-
-    this.onwheel = (e) => {
-      this.emitMouseWheel(e.wheelDelta, x, y);
-    };
-  }
-
-  registerMouseEnterAndLeaveEvents() {
-    this.onmouseenter = (e) => {
-      this.dc.send(new Uint8Array([SEND.MouseEnter]));
-    };
-
-    this.onmouseleave = (e) => {
-      this.dc.send(new Uint8Array([SEND.MouseLeave]));
-    };
-  }
-
-  emitMouseMove(x, y, deltaX, deltaY) {
-    const coord = this.normalize(x, y);
-    deltaX = (deltaX * 65536) / this.clientWidth;
-    deltaY = (deltaY * 65536) / this.clientHeight;
-    const data = new DataView(new ArrayBuffer(9));
-    data.setUint8(0, SEND.MouseMove);
-    data.setUint16(1, coord.x, true);
-    data.setUint16(3, coord.y, true);
-    data.setInt16(5, deltaX, true);
-    data.setInt16(7, deltaY, true);
-    this.dc.send(data);
-  }
-
-  emitMouseDown(button, x, y) {
-    const coord = this.normalize(x, y);
-    const data = new DataView(new ArrayBuffer(6));
-    data.setUint8(0, SEND.MouseDown);
-    data.setUint8(1, button);
-    data.setUint16(2, coord.x, true);
-    data.setUint16(4, coord.y, true);
-    this.dc.send(data);
-  }
-
-  emitMouseUp(button, x, y) {
-    const coord = this.normalize(x, y);
-    const data = new DataView(new ArrayBuffer(6));
-    data.setUint8(0, SEND.MouseUp);
-    data.setUint8(1, button);
-    data.setUint16(2, coord.x, true);
-    data.setUint16(4, coord.y, true);
-    this.dc.send(data);
-  }
-
-  emitMouseWheel(delta, x, y) {
-    const coord = this.normalize(x, y);
-    const data = new DataView(new ArrayBuffer(7));
-    data.setUint8(0, SEND.MouseWheel);
-    data.setInt16(1, delta, true);
-    data.setUint16(3, coord.x, true);
-    data.setUint16(5, coord.y, true);
-    this.dc.send(data);
-  }
-
-  emitTouchData(type, touches, fingerIds) {
-    const data = new DataView(new ArrayBuffer(2 + 6 * touches.length));
-    data.setUint8(0, type);
-    data.setUint8(1, touches.length);
-    let byte = 2;
-    for (const touch of touches) {
-      const x = touch.clientX - this.offsetLeft;
-      const y = touch.clientY - this.offsetTop;
-
-      const coord = this.normalize(x, y);
-      data.setUint16(byte, coord.x, true);
-      byte += 2;
-      data.setUint16(byte, coord.y, true);
-      byte += 2;
-      data.setUint8(byte, fingerIds[touch.identifier], true);
-      byte += 1;
-      data.setUint8(byte, 255 * touch.force, true); // force is between 0.0 and 1.0 so quantize into byte.
-      byte += 1;
-    }
-    this.dc.send(data);
-  }
 
   // emit string
   emitMessage(msg, messageType = SEND.UIInteraction) {
@@ -619,23 +333,6 @@ class PeerStream extends HTMLVideoElement {
     return true;
   }
 
-  normalize(x, y) {
-    const normalizedX = x / this.clientWidth;
-    const normalizedY = y / this.clientHeight;
-    if (normalizedX < 0.0 || normalizedX > 1.0 || normalizedY < 0.0 || normalizedY > 1.0) {
-      return {
-        inRange: false,
-        x: 65535,
-        y: 65535,
-      };
-    } else {
-      return {
-        inRange: true,
-        x: normalizedX * 65536,
-        y: normalizedY * 65536,
-      };
-    }
-  }
 
   debug(NodeJS) {
     

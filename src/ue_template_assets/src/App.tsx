@@ -5,7 +5,16 @@ import { ActorSubclass } from '@dfinity/agent';
 import { _SERVICE } from '../../declarations/ue_template/ue_template.did';
 import { SendToUE } from './peer-stream';
 
-//Handle Received Message from Unreal
+
+export const AppContext = React.createContext<{
+    authClient?: AuthClient;
+    setIsAuthenticated?: React.Dispatch<boolean>;
+    actor?: ActorSubclass<_SERVICE> | undefined;        
+}>({});
+
+
+
+//Handle Received Messages from Unreal
 export async function ReceivedFromUnreal(detail : string){
     let option = detail.split("@")[0]
     let message = detail.split("@")[1]
@@ -30,20 +39,13 @@ export async function ReceivedFromUnreal(detail : string){
     }
 }
 
-export const AppContext = React.createContext<{
-    authClient?: AuthClient;
-    setIsAuthenticated?: React.Dispatch<boolean>;
-    actor?: ActorSubclass<_SERVICE> | undefined;        
-}>({});
-
 
 const App = () => {
 
         const [authClient, setAuthClient] = React.useState<AuthClient | undefined>(undefined);
         const [actor, setActor] = React.useState<ActorSubclass<_SERVICE> | undefined>(undefined);        
-        const [isAuthenticated, setIsAuthenticated] = React.useState(false);        
-        
-        
+        const [isAuthenticated, setIsAuthenticated] = React.useState(false);      
+                
         let colorIndex = 0;
         function RandomColor(){
             let color = ["red", "green", "blue", "orange"];
@@ -52,7 +54,7 @@ const App = () => {
             return color[colorIndex];
         }
 
-
+        //Internet-Identity Login
         React.useEffect(()=>{
             AuthClient.create().then(async (client)=>{
                 setAuthClient(client);
@@ -73,7 +75,7 @@ const App = () => {
             setActor(actor);
 
         }, [isAuthenticated]);
-
+        //
         
 
 
